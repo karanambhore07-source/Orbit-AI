@@ -1,6 +1,1 @@
-# Web app and local AI dependencies.
-# Install PyTorch's CPU build separately using the command in README.md:
-# pip install torch --index-url https://download.pytorch.org/whl/cpu
-
 Flask>=3.0,<4.0
-transformers>=4.45,<5.0

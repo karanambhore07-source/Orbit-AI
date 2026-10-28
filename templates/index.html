@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/app.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -47,7 +47,7 @@
             <span class="privacy-icon" aria-hidden="true">◈</span>
             <div>
               <strong>Private by design</strong>
-              <p>Your chats stay in this browser. AI runs on your computer.</p>
+              <p>Your chats stay in this browser. AI runs locally or through your configured provider.</p>
             </div>
           </div>
           <div class="profile-row">
@@ -63,7 +63,7 @@
           <button class="icon-button menu-button" id="open-sidebar" aria-label="Open menu">☰</button>
           <div class="model-picker"><span class="status-dot" id="status-dot"></span><span id="model-status">Checking model…</span><span class="chevron">⌄</span></div>
           <div class="topbar-actions">
-            <span class="privacy-label"><span>◈</span> Runs locally</span>
+            <span class="privacy-label" id="privacy-label"><span>◈</span> Runs locally</span>
             <button class="export-button" id="top-export">Export <span aria-hidden="true">↗</span></button>
           </div>
         </header>
@@ -92,8 +92,8 @@
         <div class="composer-wrap">
           <div class="model-notice" id="model-notice" hidden>
             <span class="notice-symbol">!</span>
-            <span>The model isn’t installed yet. Download it once to start chatting offline.</span>
-            <code>python download_model.py</code>
+            <span id="model-notice-message">The model isn’t installed yet. Download it once to start chatting offline.</span>
+            <code id="model-notice-command">python download_model.py</code>
           </div>
           <form class="composer" id="chat-form">
             <label class="sr-only" for="message-input">Your message</label>

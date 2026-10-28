@@ -1,12 +1,20 @@
 import logging
+import os
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
-from chatbot import MAX_HISTORY_MESSAGES, MODEL_DIR, format_report, generate_response
+from chatbot import (
+    MAX_HISTORY_MESSAGES,
+    MODEL_DIR,
+    format_report,
+    generate_hosted_response,
+    generate_response,
+    hosted_ai_is_configured,
+)
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
 logging.basicConfig(level=logging.INFO)
 
@@ -32,13 +40,27 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/static/<path:filename>")
+def static_asset(filename: str):
+    return send_from_directory(Path(__file__).resolve().parent / "public" / "static", filename)
+
+
 @app.get("/api/status")
 def status():
-    available = model_files_available()
+    local_model_available = model_files_available()
+    hosted_ai_available = hosted_ai_is_configured()
+    vercel_deployment = bool(os.environ.get("VERCEL"))
     return jsonify(
         {
-            "model_available": available,
-            "model_name": "SmolLM2-360M-Instruct",
+            "model_available": local_model_available,
+            "hosted_ai_available": hosted_ai_available,
+            "ai_available": local_model_available or hosted_ai_available,
+            "hosting_mode": "vercel" if vercel_deployment else "local",
+            "model_name": (
+                "SmolLM2-360M-Instruct"
+                if local_model_available
+                else os.environ.get("AI_MODEL", "Hosted AI")
+            ),
             "max_history_messages": MAX_HISTORY_MESSAGES,
         }
     )
@@ -67,24 +89,34 @@ def chat():
         ):
             return jsonify({"error": "Conversation history is invalid. Start a new chat and try again."}), 400
 
-    if not model_files_available():
-        return (
-            jsonify(
-                {
-                    "error": "The local AI model is not installed yet. Run `python download_model.py`, then restart the app."
-                }
-            ),
-            503,
-        )
-
     try:
         if message.strip().lower().startswith("/report"):
             answer = format_report(message.strip())
-        else:
+        elif model_files_available():
             answer = generate_response(message.strip(), history)
+        elif hosted_ai_is_configured():
+            answer = generate_hosted_response(message.strip(), history)
+        else:
+            if os.environ.get("VERCEL"):
+                return (
+                    jsonify(
+                        {
+                            "error": "Hosted AI is not configured. Add AI_API_KEY, AI_BASE_URL, and AI_MODEL in your Vercel project settings."
+                        }
+                    ),
+                    503,
+                )
+            return (
+                jsonify(
+                    {
+                        "error": "The local AI model is not installed yet. Run `python download_model.py`, then restart the app."
+                    }
+                ),
+                503,
+            )
     except Exception:
-        app.logger.exception("Local model failed to generate a response")
-        return jsonify({"error": "The local model could not generate a response. Check the server terminal for details."}), 500
+        app.logger.exception("AI provider failed to generate a response")
+        return jsonify({"error": "The AI provider could not generate a response. Check the server logs and provider configuration."}), 502
 
     return jsonify({"answer": answer})
 

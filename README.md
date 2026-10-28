@@ -1,12 +1,12 @@
-# Orbit — Offline GenAI Chatbot
+# Orbit — Personal AI Assistant
 
-A lightweight **offline personal AI assistant** built with Python, Flask, PyTorch, and Hugging Face Transformers. Orbit is personalized for **Karan Ambhore** and helps prepare reports, summarize user-provided information, draft writing, and organize plans. Its responsive web interface runs the **SmolLM2-360M-Instruct** model locally on the CPU after its initial download; chat requests are not sent to a hosted AI service.
+A personal AI assistant built with Python, Flask, PyTorch, and Hugging Face Transformers. Orbit is personalized for **Karan Ambhore** and helps prepare reports, summarize user-provided information, draft writing, and organize plans. In local mode, the **SmolLM2-360M-Instruct** model runs on the CPU and chat stays on the computer. On Vercel, chat uses the hosted AI provider you configure, so prompts are sent to that provider.
 
 The original notebook-based setup remains available. The web app adds a local API and a browser UI with saved conversations, conversation export, starter prompts, and an offline-model status indicator.
 
 ## Features
 
-- **Local model inference:** Loads the saved model with `local_files_only=True` after the initial download.
+- **Local model inference:** Locally, loads the saved model with `local_files_only=True` after the initial download.
 - **CPU execution:** Runs the model on the CPU using PyTorch; no CUDA GPU is required.
 - **Personal assistant behavior:** Helps Karan draft reports, summarize notes, prepare writing, and organize ideas and plans.
 - **Source-only report mode:** Use `/report` followed by your notes to format a report without asking the language model to invent or expand facts.
@@ -90,10 +90,10 @@ For the web app, install PyTorch's CPU build and the remaining project packages:
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-local.txt
 ```
 
-For the original notebook workflow, you can also install dependencies in a notebook with `%pip`.
+For Vercel, `requirements.txt` contains only the lightweight Flask runtime. The local model dependencies are kept in `requirements-local.txt` so the Vercel function does not package PyTorch, Transformers, or the model weights.
 
 ### 3. Download the model
 
@@ -114,6 +114,25 @@ python app.py
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser. The model is loaded locally when you send the first message; generation runs on CPU.
 
 To format a report using only your supplied facts, select **Write a report**, enter `/report` followed by your title and notes, and send it. This report mode formats your notes without using the language model; review the result before sharing.
+
+## Deploy to Vercel
+
+The local SmolLM2 workflow stays local. On Vercel, general chat uses an OpenAI-compatible hosted inference endpoint; chat prompts are sent to that provider. Hugging Face Inference Providers does not currently list this project's exact SmolLM2-360M model for serverless inference, so select a model that your chosen provider supports, or deploy SmolLM2 as a separate dedicated endpoint.
+
+1. Import the GitHub repository into Vercel, or deploy this folder with the Vercel CLI.
+2. In **Project Settings → Environment Variables**, set the following for Production (and Preview if desired):
+
+   | Variable | Value |
+   |---|---|
+   | `AI_API_KEY` | Secret key from your hosted AI provider |
+   | `AI_BASE_URL` | Provider's OpenAI-compatible API base URL, such as `https://openrouter.ai/api/v1` |
+   | `AI_MODEL` | A chat-completion model ID enabled for your provider account |
+
+3. Redeploy after setting the variables.
+
+Vercel serves the UI assets from `public/static/`, routes the Flask app through a Python Function, and excludes the local model and PyTorch dependencies from the deployment bundle. Without provider variables, the site and source-only `/report` formatter work, but hosted AI chat returns a configuration message.
+
+To try the hosted endpoint locally, set the same variables in your shell or a private `.env` file (never commit API keys), install a compatible environment, and run `python app.py`. Local inference uses SmolLM2 when its files exist; otherwise, the configured hosted provider is used.
 
 ### 5. Use the original notebook (optional)
 
@@ -202,11 +221,10 @@ The function passes at most six recent history entries to the model, while the t
 - Expand automated tests to cover message formatting and model generation behavior.
 - Evaluate response quality on a small set of documented questions.
 - Explore quantization or other CPU optimizations after measuring memory use and response speed.
-- Add a privacy note explaining that prompts are processed locally during inference, while the initial model download contacts Hugging Face.
 
 ## Responsible use and privacy
 
-The model runs locally after its files have been downloaded, and the web app does not send each chat question to a hosted inference API. Orbit only knows information provided in the current conversation and cannot access personal files or accounts. The initial model download contacts Hugging Face, and this project does not implement a privacy audit or guarantee that other software on the computer cannot access local data. Avoid entering passwords, confidential information, or sensitive personal data.
+In local mode, chat runs on your computer after the model has been downloaded. In Vercel mode, chat prompts are sent to the hosted AI provider configured for the deployment; review that provider's data-retention and privacy terms before use. Orbit only knows information provided in the current conversation and cannot access personal files or accounts. The initial local model download contacts Hugging Face, and this project does not implement a privacy audit or guarantee that other software on the computer cannot access local data. Avoid entering passwords, confidential information, or sensitive personal data.
 
 ## Author
 

@@ -1,8 +1,12 @@
+import json
+import os
 import unittest
+from io import BytesIO
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import app as web_app
-from chatbot import SYSTEM_PROMPT, format_report
+from chatbot import SYSTEM_PROMPT, format_report, generate_hosted_response
 
 
 class ChatApiTests(unittest.TestCase):
@@ -16,6 +20,13 @@ class ChatApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"KARAN'S PERSONAL AI", response.data)
         self.assertIn(b"Write a report", response.data)
+
+    def test_static_assets_are_served(self):
+        response = self.client.get("/static/app.js")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"checkModelStatus", response.data)
+        response.close()
 
     def test_assistant_is_personalized_for_karan_and_reports(self):
         self.assertIn("Karan Ambhore", SYSTEM_PROMPT)
@@ -47,6 +58,26 @@ class ChatApiTests(unittest.TestCase):
         self.assertFalse(response.json["model_available"])
         model_available.assert_called_once_with()
 
+    @patch.dict(
+        os.environ,
+        {
+            "VERCEL": "1",
+            "AI_API_KEY": "test-key",
+            "AI_BASE_URL": "https://provider.example/v1",
+            "AI_MODEL": "test-model",
+        },
+        clear=True,
+    )
+    @patch("app.model_files_available", return_value=False)
+    def test_status_reports_hosted_ai_ready(self, _model_available):
+        response = self.client.get("/api/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json["hosted_ai_available"])
+        self.assertTrue(response.json["ai_available"])
+        self.assertEqual(response.json["hosting_mode"], "vercel")
+        self.assertNotIn("test-key", response.get_data(as_text=True))
+
     @patch("app.model_files_available", return_value=False)
     def test_chat_explains_how_to_install_missing_model(self, model_available):
         response = self.client.post("/api/chat", json={"message": "Hello"})
@@ -60,6 +91,102 @@ class ChatApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Enter a message", response.json["error"])
+
+    @patch.dict(os.environ, {"VERCEL": "1"}, clear=True)
+    @patch("app.model_files_available", return_value=False)
+    def test_vercel_chat_requires_hosted_provider_configuration(self, _model_available):
+        response = self.client.post("/api/chat", json={"message": "Hello"})
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("AI_API_KEY", response.json["error"])
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_API_KEY": "test-key",
+            "AI_BASE_URL": "https://provider.example/v1",
+            "AI_MODEL": "test-model",
+        },
+        clear=True,
+    )
+    @patch("app.generate_hosted_response", return_value="Hosted answer.")
+    @patch("app.model_files_available", return_value=False)
+    def test_chat_uses_hosted_provider_without_local_model(
+        self,
+        _model_available,
+        generate_hosted,
+    ):
+        history = [{"role": "user", "content": "Earlier question"}]
+        response = self.client.post(
+            "/api/chat",
+            json={"message": "Follow-up", "history": history},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {"answer": "Hosted answer."})
+        generate_hosted.assert_called_once_with("Follow-up", history)
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_API_KEY": "test-key",
+            "AI_BASE_URL": "https://provider.example/v1/",
+            "AI_MODEL": "test-model",
+        },
+        clear=True,
+    )
+    @patch("chatbot.urlopen")
+    def test_hosted_provider_request_uses_configured_model_and_messages(self, urlopen):
+        provider_response = MagicMock()
+        provider_response.__enter__.return_value.read.return_value = json.dumps(
+            {"choices": [{"message": {"content": "Hosted response."}}]}
+        ).encode()
+        urlopen.return_value = provider_response
+
+        answer = generate_hosted_response(
+            "Hello",
+            [{"role": "user", "content": "Earlier"}],
+        )
+
+        self.assertEqual(answer, "Hosted response.")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://provider.example/v1/chat/completions")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
+        body = json.loads(request.data)
+        self.assertEqual(body["model"], "test-model")
+        self.assertEqual(
+            [message["role"] for message in body["messages"]],
+            ["system", "user", "user"],
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_API_KEY": "test-key",
+            "AI_BASE_URL": "http://provider.example/v1",
+            "AI_MODEL": "test-model",
+        },
+        clear=True,
+    )
+    def test_hosted_provider_rejects_insecure_base_url(self):
+        with self.assertRaisesRegex(ValueError, "must use HTTPS"):
+            generate_hosted_response("Hello")
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_API_KEY": "test-key",
+            "AI_BASE_URL": "http://provider.example/v1",
+            "AI_MODEL": "test-model",
+        },
+        clear=True,
+    )
+    def test_insecure_hosted_provider_is_not_reported_ready(self):
+        with patch("app.model_files_available", return_value=False):
+            response = self.client.get("/api/status")
+
+        self.assertFalse(response.json["hosted_ai_available"])
+        self.assertFalse(response.json["ai_available"])
 
     @patch("app.model_files_available", return_value=True)
     @patch("app.generate_response", return_value="A helpful answer.")

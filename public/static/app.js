@@ -12,9 +12,12 @@ const elements = {
   input: document.querySelector("#message-input"),
   messages: document.querySelector("#messages"),
   modelNotice: document.querySelector("#model-notice"),
+  modelNoticeMessage: document.querySelector("#model-notice-message"),
+  modelNoticeCommand: document.querySelector("#model-notice-command"),
   modelStatus: document.querySelector("#model-status"),
   newChat: document.querySelector("#new-chat"),
   openSidebar: document.querySelector("#open-sidebar"),
+  privacyLabel: document.querySelector("#privacy-label"),
   sendButton: document.querySelector("#send-button"),
   sidebar: document.querySelector("#sidebar"),
   statusDot: document.querySelector("#status-dot"),
@@ -140,8 +143,24 @@ async function checkModelStatus() {
     const response = await fetch("/api/status");
     if (!response.ok) throw new Error(`Status request failed (${response.status}).`);
     const status = await response.json();
-    const available = Boolean(status.model_available);
-    elements.modelStatus.textContent = available ? "SmolLM2 · Ready" : "Model not installed";
+    const available = Boolean(status.ai_available ?? status.model_available);
+    const localModel = Boolean(status.model_available);
+    elements.modelStatus.textContent = available
+      ? localModel
+        ? "SmolLM2 · Ready"
+        : "Hosted AI · Ready"
+      : status.hosting_mode === "vercel"
+        ? "AI setup needed"
+        : "Model not installed";
+    elements.privacyLabel.lastChild.textContent = localModel
+      ? " Runs locally"
+      : available
+        ? " Hosted AI · prompts sent to provider"
+        : " Local AI";
+    elements.modelNoticeMessage.textContent = status.hosting_mode === "vercel"
+      ? "Add your hosted AI provider settings in Vercel to enable chat."
+      : "The local model isn’t installed yet. Download it once to start chatting offline.";
+    elements.modelNoticeCommand.hidden = status.hosting_mode === "vercel";
     elements.statusDot.classList.toggle("ready", available);
     elements.statusDot.classList.toggle("missing", !available);
     elements.modelNotice.hidden = available;

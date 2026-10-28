@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app.py": {
+      "maxDuration": 60,
+      "includeFiles": "templates/**",
+      "excludeFiles": "{smollm2_model/**,AI_Project.ipynb,requirements-local.txt,**/test_*.py,**/__pycache__/**,**/*.pyc}"
+    }
+  }
+}

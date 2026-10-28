@@ -1,9 +1,9 @@
 from pathlib import Path
 from threading import Lock
 from typing import Any
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from urllib.parse import urlsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
 MODEL_DIR = Path(__file__).resolve().parent / "smollm2_model"
@@ -69,10 +69,30 @@ def format_report(user_message: str) -> str:
     )
 
 
+def hosted_ai_is_configured() -> bool:
+    import os
+
+    base_url = os.environ.get("AI_BASE_URL", "")
+    return bool(
+        os.environ.get("AI_API_KEY")
+        and os.environ.get("AI_MODEL")
+        and urlsplit(base_url).scheme == "https"
+        and urlsplit(base_url).netloc
+    )
+
+
 def _load_model() -> tuple[Any, Any]:
     global _model, _tokenizer
 
     if _model is None or _tokenizer is None:
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+        except ImportError as exc:
+            raise RuntimeError(
+                "Local inference dependencies are missing. Install requirements-local.txt."
+            ) from exc
+
         if not MODEL_DIR.is_dir():
             raise FileNotFoundError(
                 f"Model files were not found in {MODEL_DIR}. Run `python download_model.py` first."
@@ -93,6 +113,65 @@ def _load_model() -> tuple[Any, Any]:
         _model = model
 
     return _tokenizer, _model
+
+
+def generate_hosted_response(
+    user_message: str,
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    import json
+    import os
+
+    api_key = os.environ.get("AI_API_KEY")
+    base_url = os.environ.get("AI_BASE_URL", "").rstrip("/")
+    model_name = os.environ.get("AI_MODEL")
+    if not api_key or not base_url or not model_name:
+        raise RuntimeError("AI_API_KEY, AI_BASE_URL, and AI_MODEL must be configured.")
+    parsed_base_url = urlsplit(base_url)
+    if parsed_base_url.scheme != "https" or not parsed_base_url.netloc:
+        raise ValueError("AI_BASE_URL must use HTTPS to protect your API key.")
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *(history or [])[-MAX_HISTORY_MESSAGES:],
+        {"role": "user", "content": user_message},
+    ]
+    body = json.dumps(
+        {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": MAX_NEW_TOKENS,
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+    ).encode("utf-8")
+    api_request = Request(
+        f"{base_url}/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(api_request, timeout=50) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise RuntimeError(
+            f"AI provider request failed with HTTP {exc.code}. Check the model, API key, and provider account."
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError("Could not connect to the configured AI provider.") from exc
+
+    try:
+        answer = result["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("AI provider returned an unsupported chat response.") from exc
+    if not isinstance(answer, str) or not answer.strip():
+        raise RuntimeError("AI provider returned an empty chat response.")
+    return answer.strip()
 
 
 def generate_response(user_message: str, history: list[dict[str, str]] | None = None) -> str:

@@ -1,0 +1,7 @@
+.git
+.venv
+__pycache__
+smollm2_model
+AI_Project.ipynb
+requirements-local.txt
+test_app.py

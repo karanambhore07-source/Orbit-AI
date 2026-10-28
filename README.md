@@ -1,3 +1,5 @@
+<img width="1918" height="845" alt="Screenshot 2026-10-28 152115" src="https://github.com/user-attachments/assets/682b4b7d-5b51-4267-b36a-18394b9c8fb9" />
+
 # Orbit — Personal AI Assistant
 
 A personal AI assistant built with Python, Flask, PyTorch, and Hugging Face Transformers. Orbit is personalized for **Karan Ambhore** and helps prepare reports, summarize user-provided information, draft writing, and organize plans. In local mode, the **SmolLM2-360M-Instruct** model runs on the CPU and chat stays on the computer. On Vercel, chat uses the hosted AI provider you configure, so prompts are sent to that provider.
@@ -239,5 +241,4 @@ No project license is specified in the notebook. Add a `LICENSE` file before pub
 - [Hugging Face Transformers](https://huggingface.co/docs/transformers/index)
 - [SmolLM2-360M-Instruct model page](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct)
 - [PyTorch](https://pytorch.org/)
-#   O r b i t - A I  
- 
+#

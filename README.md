@@ -1,3 +1,4 @@
+<img width="1918" height="845" alt="Screenshot 2026-10-28 152115" src="https://github.com/user-attachments/assets/682b4b7d-5b51-4267-b36a-18394b9c8fb9" />
 # Orbit — Offline GenAI Chatbot
 
 A lightweight **offline personal AI assistant** built with Python, Flask, PyTorch, and Hugging Face Transformers. Orbit is personalized for **Karan Ambhore** and helps prepare reports, summarize user-provided information, draft writing, and organize plans. Its responsive web interface runs the **SmolLM2-360M-Instruct** model locally on the CPU after its initial download; chat requests are not sent to a hosted AI service.
